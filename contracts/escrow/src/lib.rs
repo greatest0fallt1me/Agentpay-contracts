@@ -619,6 +619,7 @@ impl Escrow {
             .unwrap_or_else(|| panic_with_error!(&env, EscrowError::NotInitialized));
         admin.require_auth();
         env.storage().persistent().set(&DataKey::Paused, &false);
+        env.events().publish((symbol_short!("paused"),), false);
     }
 
     /// Pause the contract — every state-changing entrypoint will then
@@ -632,6 +633,7 @@ impl Escrow {
             .unwrap_or_else(|| panic_with_error!(&env, EscrowError::NotInitialized));
         admin.require_auth();
         env.storage().persistent().set(&DataKey::Paused, &true);
+        env.events().publish((symbol_short!("paused"),), true);
     }
 
     /// Migrate the persisted schema from v1 to v2. Admin-gated and
