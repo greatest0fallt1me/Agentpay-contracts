@@ -261,6 +261,14 @@ impl Escrow {
         billed
     }
 
+    /// Read the configured per-call floor, or `0` (no floor) when absent.
+    pub fn get_min_requests_per_call(env: Env) -> u32 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::MinRequestsPerCall)
+            .unwrap_or(0)
+    }
+
     /// Admin sets the per-call lower bound on `requests` for batched
     /// writes. Pass `0` to disable the floor.
     pub fn set_min_requests_per_call(env: Env, min_requests: u32) {
