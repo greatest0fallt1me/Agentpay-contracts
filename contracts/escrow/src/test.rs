@@ -18,7 +18,7 @@ fn test_version() {
     let env = Env::default();
     let (client, _admin) = setup_initialized(&env);
     let v = client.version();
-    assert_eq!(v, 1);
+    assert_eq!(v, 2);
 }
 
 #[test]

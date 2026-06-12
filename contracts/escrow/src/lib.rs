@@ -344,7 +344,7 @@ impl Escrow {
         let price: i128 = env
             .storage()
             .persistent()
-            .get(&DataKey::ServicePrice(service_id))
+            .get(&DataKey::ServicePrice(service_id.clone()))
             .unwrap_or(0);
         let billed = (requests as i128).saturating_mul(price);
         env.storage().persistent().set(&usage_key, &0u32);
@@ -589,9 +589,13 @@ impl Escrow {
     }
 
     /// Get the version of the contract for compatibility checks.
+    ///
+    /// v2 adds pause/unpause, two-step admin handover, service registry,
+    /// per-call min/max bounds, an agent allowlist, lifetime usage
+    /// counters, settlement-time tracking, and a stored schema version.
     pub fn version(env: Env) -> u32 {
         let _ = env;
-        1
+        2
     }
 }
 
