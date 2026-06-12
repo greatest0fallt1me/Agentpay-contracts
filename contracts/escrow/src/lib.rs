@@ -18,6 +18,9 @@ pub enum DataKey {
     Usage(Address, Symbol),
     /// Price per request, in stroops, for a registered service.
     ServicePrice(Symbol),
+    /// `true` when the contract is paused (no state-changing entrypoints
+    /// accept calls).
+    Paused,
 }
 
 /// Typed contract errors. Codes are append-only to keep client SDKs stable.
@@ -31,6 +34,8 @@ pub enum EscrowError {
     RequestsMustBePositive = 2,
     /// An admin-gated entrypoint was invoked but the admin is not set.
     NotInitialized = 3,
+    /// A state-changing entrypoint was called while `Paused` is `true`.
+    ContractPaused = 4,
 }
 
 #[contracttype]
