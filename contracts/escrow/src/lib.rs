@@ -227,6 +227,29 @@ impl Escrow {
         billed
     }
 
+    /// Admin toggles strict-registration mode. When enabled,
+    /// `record_usage` rejects unknown services with
+    /// EscrowError::ServiceNotRegistered.
+    pub fn set_require_service_registration(env: Env, required: bool) {
+        let admin: Address = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Admin)
+            .unwrap_or_else(|| panic_with_error!(&env, EscrowError::NotInitialized));
+        admin.require_auth();
+        env.storage()
+            .persistent()
+            .set(&DataKey::RequireServiceRegistration, &required);
+    }
+
+    /// Read the strict-registration flag.
+    pub fn is_service_registration_required(env: Env) -> bool {
+        env.storage()
+            .persistent()
+            .get(&DataKey::RequireServiceRegistration)
+            .unwrap_or(false)
+    }
+
     /// Read whether a service has been registered.
     pub fn is_service_registered(env: Env, service_id: Symbol) -> bool {
         env.storage()
