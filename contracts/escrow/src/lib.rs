@@ -1,8 +1,20 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, panic_with_error, Address, Env, Symbol,
+    contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, Address,
+    Env, String, Symbol,
 };
+
+/// Free-form metadata about a service. Stored under
+/// `DataKey::ServiceMetadata(service_id)` so dashboards and clients can
+/// resolve a service to a human-readable description and owner without
+/// keeping a parallel registry off-chain.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ServiceMetadata {
+    pub description: String,
+    pub owner: Address,
+}
 
 /// Storage keys used by the escrow contract.
 ///
@@ -59,6 +71,8 @@ pub enum DataKey {
     /// tracks what the persisted state layout looks like so callers can
     /// confirm a `migrate` has run on a redeployed contract.
     SchemaVersion,
+    /// Free-form metadata (`description`, `owner`) about a service.
+    ServiceMetadata(Symbol),
 }
 
 /// Typed contract errors. Codes are append-only to keep client SDKs stable.
