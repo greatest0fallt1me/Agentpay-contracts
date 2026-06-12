@@ -227,6 +227,14 @@ impl Escrow {
         billed
     }
 
+    /// Read whether a service has been registered.
+    pub fn is_service_registered(env: Env, service_id: Symbol) -> bool {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ServiceRegistered(service_id))
+            .unwrap_or(false)
+    }
+
     /// Unregister a service. Admin-gated; idempotent (removing an absent
     /// entry is a no-op). Existing usage records and prices for the
     /// service are NOT touched — call reset_usage or remove the price
