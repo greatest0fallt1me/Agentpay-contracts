@@ -35,6 +35,9 @@ pub enum DataKey {
     /// set, `record_usage` rejects calls above this delta. Defaults to
     /// `u32::MAX` (no limit) when absent.
     MaxRequestsPerCall,
+    /// Lower bound on `requests` per single `record_usage` call.
+    /// Useful for amortising the per-write ledger cost.
+    MinRequestsPerCall,
 }
 
 /// Typed contract errors. Codes are append-only to keep client SDKs stable.
@@ -60,6 +63,9 @@ pub enum EscrowError {
     /// `record_usage` was called with a `requests` value above the
     /// configured `MaxRequestsPerCall` cap.
     RequestsExceedsMaxPerCall = 8,
+    /// `record_usage` was called with a `requests` value below the
+    /// configured `MinRequestsPerCall` floor.
+    RequestsBelowMinPerCall = 9,
 }
 
 #[contracttype]
@@ -253,6 +259,20 @@ impl Escrow {
         let billed = (requests as i128).saturating_mul(price);
         env.storage().persistent().set(&usage_key, &0u32);
         billed
+    }
+
+    /// Admin sets the per-call lower bound on `requests` for batched
+    /// writes. Pass `0` to disable the floor.
+    pub fn set_min_requests_per_call(env: Env, min_requests: u32) {
+        let admin: Address = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Admin)
+            .unwrap_or_else(|| panic_with_error!(&env, EscrowError::NotInitialized));
+        admin.require_auth();
+        env.storage()
+            .persistent()
+            .set(&DataKey::MinRequestsPerCall, &min_requests);
     }
 
     /// Read the configured per-call cap, or `u32::MAX` (no limit) if
