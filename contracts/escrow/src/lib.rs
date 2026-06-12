@@ -142,6 +142,27 @@ impl Escrow {
             .unwrap_or(0)
     }
 
+    /// Compute the outstanding bill for an `(agent, service_id)` pair:
+    /// `accumulated_requests * price_per_request`, in stroops.
+    ///
+    /// Returns 0 when either side is zero. Saturates at `i128::MAX` on
+    /// overflow — this is read-only, so a saturated value just signals
+    /// to the off-chain settlement loop that something has gone wrong
+    /// rather than panicking the host.
+    pub fn compute_billing(env: Env, agent: Address, service_id: Symbol) -> i128 {
+        let requests: u32 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Usage(agent, service_id.clone()))
+            .unwrap_or(0);
+        let price: i128 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ServicePrice(service_id))
+            .unwrap_or(0);
+        (requests as i128).saturating_mul(price)
+    }
+
     /// Get the version of the contract for compatibility checks.
     pub fn version(env: Env) -> u32 {
         let _ = env;
