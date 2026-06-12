@@ -43,6 +43,10 @@ pub enum DataKey {
     AgentAllowed(Address),
     /// Master toggle: when true, the per-agent allowlist is enforced.
     AllowlistEnabled,
+    /// Cross-service total request count for a given agent.
+    /// Settlement does NOT reset this counter; it is the lifetime
+    /// signal for analytics and SLA tiering.
+    TotalUsageByAgent(Address),
 }
 
 /// Typed contract errors. Codes are append-only to keep client SDKs stable.
@@ -188,6 +192,14 @@ impl Escrow {
         let prev: u32 = env.storage().persistent().get(&key).unwrap_or(0);
         let total = prev.saturating_add(requests);
         env.storage().persistent().set(&key, &total);
+
+        // Cross-service lifetime counter for the agent. Saturates at u32::MAX.
+        let total_key = DataKey::TotalUsageByAgent(agent.clone());
+        let prev_total: u32 = env.storage().persistent().get(&total_key).unwrap_or(0);
+        env.storage()
+            .persistent()
+            .set(&total_key, &prev_total.saturating_add(requests));
+
         UsageRecord {
             agent,
             service_id,
