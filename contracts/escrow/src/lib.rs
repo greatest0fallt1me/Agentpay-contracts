@@ -47,6 +47,9 @@ pub enum DataKey {
     /// Settlement does NOT reset this counter; it is the lifetime
     /// signal for analytics and SLA tiering.
     TotalUsageByAgent(Address),
+    /// Protocol-wide lifetime request counter, written by every
+    /// successful `record_usage`. Useful as a single grafana gauge.
+    TotalRequestsAllTime,
 }
 
 /// Typed contract errors. Codes are append-only to keep client SDKs stable.
@@ -199,6 +202,17 @@ impl Escrow {
         env.storage()
             .persistent()
             .set(&total_key, &prev_total.saturating_add(requests));
+
+        // Protocol-wide lifetime counter (u64 to delay the saturation horizon).
+        let proto_prev: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::TotalRequestsAllTime)
+            .unwrap_or(0);
+        env.storage().persistent().set(
+            &DataKey::TotalRequestsAllTime,
+            &proto_prev.saturating_add(requests as u64),
+        );
 
         UsageRecord {
             agent,
