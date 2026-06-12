@@ -227,6 +227,20 @@ impl Escrow {
         billed
     }
 
+    /// Register a service so `record_usage` accepts it under strict
+    /// registration. Admin-gated and idempotent.
+    pub fn register_service(env: Env, service_id: Symbol) {
+        let admin: Address = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Admin)
+            .unwrap_or_else(|| panic_with_error!(&env, EscrowError::NotInitialized));
+        admin.require_auth();
+        env.storage()
+            .persistent()
+            .set(&DataKey::ServiceRegistered(service_id), &true);
+    }
+
     /// Cancel a pending admin transfer. Current admin only. No-op when
     /// nothing is pending.
     pub fn cancel_admin_transfer(env: Env) {
