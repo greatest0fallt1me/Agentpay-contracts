@@ -285,6 +285,28 @@ impl Escrow {
             .unwrap_or(0)
     }
 
+    /// Admin enables or disables the agent allowlist gate. While
+    /// disabled, `record_usage` does not consult the per-agent entries.
+    pub fn set_allowlist_enabled(env: Env, enabled: bool) {
+        let admin: Address = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Admin)
+            .unwrap_or_else(|| panic_with_error!(&env, EscrowError::NotInitialized));
+        admin.require_auth();
+        env.storage()
+            .persistent()
+            .set(&DataKey::AllowlistEnabled, &enabled);
+    }
+
+    /// Read the master allowlist toggle.
+    pub fn is_allowlist_enabled(env: Env) -> bool {
+        env.storage()
+            .persistent()
+            .get(&DataKey::AllowlistEnabled)
+            .unwrap_or(false)
+    }
+
     /// Read whether an agent is explicitly allowed (false for never-set).
     pub fn is_agent_allowed(env: Env, agent: Address) -> bool {
         env.storage()
