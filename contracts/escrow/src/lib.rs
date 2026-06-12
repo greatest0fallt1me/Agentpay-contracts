@@ -218,6 +218,22 @@ impl Escrow {
         billed
     }
 
+    /// Step 1 of admin handover. Current admin proposes a new admin
+    /// address; the new admin must then call `accept_admin_transfer`
+    /// from their own key to finish the rotation. Re-proposing
+    /// overwrites the prior pending entry.
+    pub fn propose_admin_transfer(env: Env, new_admin: Address) {
+        let admin: Address = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Admin)
+            .unwrap_or_else(|| panic_with_error!(&env, EscrowError::NotInitialized));
+        admin.require_auth();
+        env.storage()
+            .persistent()
+            .set(&DataKey::PendingAdmin, &new_admin);
+    }
+
     /// Returns `true` iff the contract is currently paused.
     pub fn is_paused(env: Env) -> bool {
         env.storage()

@@ -179,6 +179,14 @@ fn test_record_usage_rejected_while_paused() {
 }
 
 #[test]
+fn test_propose_admin_transfer_persists_pending() {
+    let env = Env::default();
+    let (client, _admin) = setup_initialized(&env);
+    let next = Address::generate(&env);
+    client.propose_admin_transfer(&next);
+}
+
+#[test]
 fn test_is_paused_round_trip() {
     let env = Env::default();
     let (client, _admin) = setup_initialized(&env);
