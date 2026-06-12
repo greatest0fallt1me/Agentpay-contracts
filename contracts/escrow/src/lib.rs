@@ -194,6 +194,14 @@ impl Escrow {
         billed
     }
 
+    /// Returns `true` iff the contract is currently paused.
+    pub fn is_paused(env: Env) -> bool {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Paused)
+            .unwrap_or(false)
+    }
+
     /// Resume operations after a previous `pause()`. Admin-gated and
     /// idempotent (unpausing an already-unpaused contract is a no-op).
     pub fn unpause(env: Env) {

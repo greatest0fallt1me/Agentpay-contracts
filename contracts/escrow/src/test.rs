@@ -159,6 +159,17 @@ fn test_unpause_admin_can_unpause() {
 }
 
 #[test]
+fn test_is_paused_round_trip() {
+    let env = Env::default();
+    let (client, _admin) = setup_initialized(&env);
+    assert!(!client.is_paused());
+    client.pause();
+    assert!(client.is_paused());
+    client.unpause();
+    assert!(!client.is_paused());
+}
+
+#[test]
 fn test_settle_returns_zero_for_unused_pair() {
     let env = Env::default();
     let (client, _admin) = setup_initialized(&env);
