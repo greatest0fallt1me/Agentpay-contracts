@@ -19,6 +19,13 @@ A service's metadata (`description` + `owner`) and its registration flag live in
 independent storage slots. `clear_service_metadata` (admin-gated, idempotent)
 removes only the metadata; the registration flag and per-(agent, service) usage
 history are untouched.
+
+`register_service_with_metadata(service_id, description, owner)` is an
+admin-gated convenience that does both in one atomic call: it sets the
+registration flag and persists the metadata, with a single auth check and a
+single `svc_reg(service_id, owner)` event. It is equivalent to calling
+`register_service` then `set_service_metadata`. Re-registering an existing id
+overwrites its metadata idempotently, and an empty `description` is accepted.
 ### Admin proposal validation
 
 `propose_admin_transfer` rejects proposing the current admin as the new admin

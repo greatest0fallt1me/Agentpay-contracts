@@ -697,3 +697,95 @@ fn test_pause_pause_unpause_ends_unpaused() {
 
     assert!(!client.is_paused());
 }
+
+#[test]
+fn test_register_service_with_metadata_sets_flag_and_metadata() {
+    let env = Env::default();
+    let (client, _admin) = setup_initialized(&env);
+    let svc = Symbol::new(&env, "infer");
+    let owner = Address::generate(&env);
+    let description = String::from_str(&env, "GPU inference endpoint");
+
+    client.register_service_with_metadata(&svc, &description, &owner);
+
+    // A single call sets both the registration flag and the metadata.
+    assert!(client.is_service_registered(&svc));
+    let meta = client.get_service_metadata(&svc).unwrap();
+    assert_eq!(meta.description, description);
+    assert_eq!(meta.owner, owner);
+}
+
+#[test]
+fn test_register_service_with_metadata_emits_svc_reg_event() {
+    let env = Env::default();
+    let (client, _admin) = setup_initialized(&env);
+    let svc = Symbol::new(&env, "infer");
+    let owner = Address::generate(&env);
+    let description = String::from_str(&env, "GPU inference endpoint");
+
+    client.register_service_with_metadata(&svc, &description, &owner);
+
+    let events = env.events().all();
+    assert!(!events.is_empty());
+    let (_addr, topics, data) = events.last().unwrap();
+    let expected_topics: soroban_sdk::Vec<soroban_sdk::Val> =
+        (symbol_short!("svc_reg"),).into_val(&env);
+    assert_eq!(topics, expected_topics);
+    let decoded: (Symbol, Address) = data.into_val(&env);
+    assert_eq!(decoded, (svc.clone(), owner.clone()));
+}
+
+#[test]
+fn test_register_service_with_metadata_overwrites_idempotently() {
+    let env = Env::default();
+    let (client, _admin) = setup_initialized(&env);
+    let svc = Symbol::new(&env, "infer");
+    let owner1 = Address::generate(&env);
+    let owner2 = Address::generate(&env);
+    let desc1 = String::from_str(&env, "first");
+    let desc2 = String::from_str(&env, "second");
+
+    client.register_service_with_metadata(&svc, &desc1, &owner1);
+    // Re-registering the same id overwrites the metadata and keeps it registered.
+    client.register_service_with_metadata(&svc, &desc2, &owner2);
+
+    assert!(client.is_service_registered(&svc));
+    let meta = client.get_service_metadata(&svc).unwrap();
+    assert_eq!(meta.description, desc2);
+    assert_eq!(meta.owner, owner2);
+}
+
+#[test]
+fn test_register_service_with_metadata_allows_empty_description() {
+    let env = Env::default();
+    let (client, _admin) = setup_initialized(&env);
+    let svc = Symbol::new(&env, "infer");
+    let owner = Address::generate(&env);
+    let empty = String::from_str(&env, "");
+
+    client.register_service_with_metadata(&svc, &empty, &owner);
+
+    assert!(client.is_service_registered(&svc));
+    let meta = client.get_service_metadata(&svc).unwrap();
+    assert_eq!(meta.description, empty);
+    assert_eq!(meta.owner, owner);
+}
+
+#[test]
+#[should_panic]
+fn test_register_service_with_metadata_rejects_non_admin() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, Escrow);
+    let client = EscrowClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    env.mock_all_auths();
+    client.init(&admin);
+
+    // Clear all authorizations so the admin.require_auth() inside the
+    // entrypoint has nothing to satisfy it and the call is rejected.
+    let svc = Symbol::new(&env, "infer");
+    let owner = Address::generate(&env);
+    let description = String::from_str(&env, "GPU inference endpoint");
+    env.set_auths(&[]);
+    client.register_service_with_metadata(&svc, &description, &owner);
+}
