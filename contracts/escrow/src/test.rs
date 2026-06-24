@@ -1010,6 +1010,20 @@ fn test_record_usage_min_beats_registration() {
     let agent = Address::generate(&env);
     let service_id = Symbol::new(&env, "weather_api");
     client.record_usage(&agent, &service_id, &3u32);
+// ---------------------------------------------------------------------------
+// Issue #18 — strict service-registration (#7) and service-disabled (#12)
+// gates in `record_usage`, plus the registry/disabled accessor round-trips.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_i18_strict_off_allows_unknown_service() {
+    let env = Env::default();
+    let (client, _admin) = setup_initialized(&env);
+    // Default: strict registration is off, so unknown services are accepted.
+    assert!(!client.is_service_registration_required());
+    let agent = Address::generate(&env);
+    let svc = Symbol::new(&env, "unknown");
+    assert_eq!(client.record_usage(&agent, &svc, &1u32).requests, 1);
 }
 
 #[test]
@@ -1051,18 +1065,43 @@ fn test_record_usage_allowlist_fires_when_enabled_and_not_allowed() {
     let agent = Address::generate(&env);
     let service_id = Symbol::new(&env, "weather_api");
     client.record_usage(&agent, &service_id, &5u32);
+fn test_i18_strict_on_rejects_unregistered() {
+    let env = Env::default();
+    let (client, _admin) = setup_initialized(&env);
+    client.set_require_service_registration(&true);
+    assert!(client.is_service_registration_required());
+    let agent = Address::generate(&env);
+    client.record_usage(&agent, &Symbol::new(&env, "ghost"), &1u32);
+}
+
+#[test]
+fn test_i18_register_admits_service_under_strict_mode() {
+    let env = Env::default();
+    let (client, _admin) = setup_initialized(&env);
+    client.set_require_service_registration(&true);
+    let agent = Address::generate(&env);
+    let svc = Symbol::new(&env, "infer");
+    client.register_service(&svc);
+    assert!(client.is_service_registered(&svc));
+    assert_eq!(client.record_usage(&agent, &svc, &2u32).requests, 2);
 }
 
 #[test]
 #[should_panic(expected = "Error(Contract, #7)")]
 fn test_record_usage_registration_fires_when_required_and_unregistered() {
     // Registration (#7) fires when required and the service is unregistered.
+fn test_i18_unregister_reinstates_rejection() {
     let env = Env::default();
     let (client, _admin) = setup_initialized(&env);
     client.set_require_service_registration(&true);
     let agent = Address::generate(&env);
     let service_id = Symbol::new(&env, "weather_api");
     client.record_usage(&agent, &service_id, &5u32);
+    let svc = Symbol::new(&env, "infer");
+    client.register_service(&svc);
+    client.unregister_service(&svc);
+    assert!(!client.is_service_registered(&svc));
+    client.record_usage(&agent, &svc, &1u32);
 }
 
 #[test]
@@ -1172,4 +1211,28 @@ fn test_i17_record_usage_rejects_below_min() {
     client.set_min_requests_per_call(&10u32);
     let agent = Address::generate(&env);
     client.record_usage(&agent, &Symbol::new(&env, "infer"), &9u32);
+fn test_i18_disabled_service_rejects_usage() {
+    let env = Env::default();
+    let (client, _admin) = setup_initialized(&env);
+    let agent = Address::generate(&env);
+    let svc = Symbol::new(&env, "infer");
+    client.set_service_disabled(&svc, &true);
+    assert!(client.is_service_disabled(&svc));
+    client.record_usage(&agent, &svc, &1u32);
+}
+
+#[test]
+fn test_i18_reenable_service_resumes_usage() {
+    let env = Env::default();
+    let (client, _admin) = setup_initialized(&env);
+    let agent = Address::generate(&env);
+    let svc = Symbol::new(&env, "infer");
+    // Disabling then re-enabling restores the ability to accrue usage and
+    // leaves the registration flag independent of the disabled flag.
+    client.register_service(&svc);
+    client.set_service_disabled(&svc, &true);
+    client.set_service_disabled(&svc, &false);
+    assert!(!client.is_service_disabled(&svc));
+    assert!(client.is_service_registered(&svc));
+    assert_eq!(client.record_usage(&agent, &svc, &3u32).requests, 3);
 }
