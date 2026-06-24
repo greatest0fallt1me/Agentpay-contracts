@@ -48,6 +48,26 @@ use soroban_sdk::{
 
 use super::*;
 use soroban_sdk::{testutils::Address as _, Address, String, Symbol};
+//! # Pause / unpause events and idempotent toggling
+//!
+//! The tests in the `pause/unpause events and idempotent toggling` section
+//! (issue #42) cover the admin-gated pause switch:
+//!
+//! - `pause()` publishes a `paused` event whose data is the bool `true`.
+//! - `unpause()` publishes a `paused` event whose data is the bool `false`.
+//! - Double-pause and double-unpause are idempotent: `is_paused` stays
+//!   consistent across repeated calls.
+//! - A `pause -> pause -> unpause` sequence ends unpaused.
+//!
+//! NOTE: `setup_initialized` calls `env.mock_all_auths()`, so the admin
+//! signature is mocked. Non-admin rejection is therefore not exercised here;
+//! these tests assert the admin/happy path and the idempotency invariants.
+
+use super::*;
+use soroban_sdk::{
+    testutils::{Address as _, Events},
+    Address, IntoVal, Symbol,
+};
 
 fn setup_initialized(env: &Env) -> (EscrowClient<'_>, Address) {
     env.mock_all_auths();
@@ -488,6 +508,42 @@ fn test_record_usage_emits_usage_event_with_payload() {
     let svc = Symbol::new(&env, "weather_api");
 
     let record = client.record_usage(&agent, &svc, &25u32);
+// ---------------------------------------------------------------------------
+// pause/unpause events and idempotent toggling (issue #42)
+//
+// pause() and unpause() are admin-gated, idempotent, and each publish a
+// `paused` topic carrying a bare bool (true on pause, false on unpause).
+// Auth is mocked via env.mock_all_auths() in setup_initialized, so only the
+// admin/happy path and idempotency are exercised here.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_pause_emits_paused_event_true() {
+    let env = Env::default();
+    let (client, _admin) = setup_initialized(&env);
+
+    client.pause();
+
+    // Read events immediately after pause(): events().all() only surfaces
+    // events from the most recent contract invocation.
+    let events = env.events().all();
+    assert!(!events.is_empty());
+    let (_addr, topics, data) = events.last().unwrap();
+    let expected_topics: soroban_sdk::Vec<soroban_sdk::Val> =
+        (symbol_short!("paused"),).into_val(&env);
+    assert_eq!(topics, expected_topics);
+    let flag: bool = data.into_val(&env);
+    assert!(flag);
+    assert!(client.is_paused());
+}
+
+#[test]
+fn test_unpause_emits_paused_event_false() {
+    let env = Env::default();
+    let (client, _admin) = setup_initialized(&env);
+    client.pause();
+
+    client.unpause();
 
     let events = env.events().all();
     assert!(!events.is_empty());
@@ -658,4 +714,45 @@ fn test_service_slot_toggle_matrix_is_independent() {
     client.set_service_disabled(&svc, &false);
     assert!(client.is_service_registered(&svc));
     assert!(!client.is_service_disabled(&svc));
+        (symbol_short!("paused"),).into_val(&env);
+    assert_eq!(topics, expected_topics);
+    let flag: bool = data.into_val(&env);
+    assert!(!flag);
+    assert!(!client.is_paused());
+}
+
+#[test]
+fn test_double_pause_is_idempotent() {
+    let env = Env::default();
+    let (client, _admin) = setup_initialized(&env);
+
+    client.pause();
+    assert!(client.is_paused());
+    // Pausing an already-paused contract keeps it paused.
+    client.pause();
+    assert!(client.is_paused());
+}
+
+#[test]
+fn test_double_unpause_is_idempotent() {
+    let env = Env::default();
+    let (client, _admin) = setup_initialized(&env);
+
+    // Unpausing a never-paused contract is a no-op and stays unpaused.
+    client.unpause();
+    assert!(!client.is_paused());
+    client.unpause();
+    assert!(!client.is_paused());
+}
+
+#[test]
+fn test_pause_pause_unpause_ends_unpaused() {
+    let env = Env::default();
+    let (client, _admin) = setup_initialized(&env);
+
+    client.pause();
+    client.pause();
+    client.unpause();
+
+    assert!(!client.is_paused());
 }
