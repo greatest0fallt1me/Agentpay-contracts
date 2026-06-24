@@ -697,3 +697,100 @@ fn test_pause_pause_unpause_ends_unpaused() {
 
     assert!(!client.is_paused());
 }
+
+#[test]
+fn test_remove_service_price_clears_price() {
+    let env = Env::default();
+    let (client, _admin) = setup_initialized(&env);
+    let svc = Symbol::new(&env, "infer");
+    client.set_service_price(&svc, &500i128);
+    assert_eq!(client.get_service_price(&svc), 500i128);
+
+    client.remove_service_price(&svc);
+
+    // Reads back 0, same as a never-priced service.
+    assert_eq!(client.get_service_price(&svc), 0i128);
+}
+
+#[test]
+fn test_remove_service_price_is_idempotent() {
+    let env = Env::default();
+    let (client, _admin) = setup_initialized(&env);
+    let svc = Symbol::new(&env, "never_set");
+    // Removing the price of a never-priced service is a no-op (no panic).
+    client.remove_service_price(&svc);
+    assert_eq!(client.get_service_price(&svc), 0i128);
+}
+
+#[test]
+fn test_remove_service_price_then_reset_works() {
+    let env = Env::default();
+    let (client, _admin) = setup_initialized(&env);
+    let svc = Symbol::new(&env, "infer");
+    client.set_service_price(&svc, &500i128);
+    client.remove_service_price(&svc);
+    assert_eq!(client.get_service_price(&svc), 0i128);
+
+    // Re-setting after removal works and round-trips.
+    client.set_service_price(&svc, &750i128);
+    assert_eq!(client.get_service_price(&svc), 750i128);
+}
+
+#[test]
+fn test_compute_billing_zero_after_price_removed() {
+    let env = Env::default();
+    let (client, _admin) = setup_initialized(&env);
+    let agent = Address::generate(&env);
+    let svc = Symbol::new(&env, "infer");
+    client.set_service_price(&svc, &10i128);
+    client.record_usage(&agent, &svc, &42u32);
+    assert_eq!(client.compute_billing(&agent, &svc), 420i128);
+
+    client.remove_service_price(&svc);
+
+    // Usage is untouched, but with no price the bill is zero.
+    assert_eq!(client.compute_billing(&agent, &svc), 0i128);
+}
+
+#[test]
+fn test_remove_service_price_emits_price_rm_event() {
+    let env = Env::default();
+    let (client, _admin) = setup_initialized(&env);
+    let svc = Symbol::new(&env, "infer");
+    client.set_service_price(&svc, &500i128);
+
+    client.remove_service_price(&svc);
+
+    let events = env.events().all();
+    assert!(!events.is_empty());
+    let (_addr, topics, data) = events.last().unwrap();
+    let expected_topics: soroban_sdk::Vec<soroban_sdk::Val> =
+        (symbol_short!("price_rm"),).into_val(&env);
+    assert_eq!(topics, expected_topics);
+    let decoded: Symbol = data.into_val(&env);
+    assert_eq!(decoded, svc);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #4)")]
+fn test_remove_service_price_rejected_while_paused() {
+    let env = Env::default();
+    let (client, _admin) = setup_initialized(&env);
+    let svc = Symbol::new(&env, "infer");
+    client.set_service_price(&svc, &500i128);
+    client.pause();
+    client.remove_service_price(&svc);
+}
+
+#[test]
+#[should_panic(expected = "Unauthorized")]
+fn test_remove_service_price_non_admin_panics() {
+    let env = Env::default();
+    let (client, _admin) = setup_initialized(&env);
+    let svc = Symbol::new(&env, "infer");
+    client.set_service_price(&svc, &500i128);
+    // Drop the mocked auths so the admin's require_auth() is unsatisfied,
+    // simulating a caller without the admin signature.
+    env.set_auths(&[]);
+    client.remove_service_price(&svc);
+}
