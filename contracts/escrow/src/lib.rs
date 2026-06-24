@@ -114,6 +114,10 @@ pub enum EscrowError {
     MigrationVersionMismatch = 11,
     /// `record_usage` referenced a service that has been disabled.
     ServiceDisabled = 12,
+    /// `propose_admin_transfer` was called with the current admin as the
+    /// proposed new admin — a no-op handover that is rejected to surface
+    /// caller mistakes early.
+    InvalidAdminProposal = 13,
 }
 
 #[contracttype]
@@ -596,6 +600,9 @@ impl Escrow {
             .get(&DataKey::Admin)
             .unwrap_or_else(|| panic_with_error!(&env, EscrowError::NotInitialized));
         admin.require_auth();
+        if new_admin == admin {
+            panic_with_error!(&env, EscrowError::InvalidAdminProposal);
+        }
         env.storage()
             .persistent()
             .set(&DataKey::PendingAdmin, &new_admin);

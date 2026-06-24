@@ -6,6 +6,12 @@ Soroban smart contracts for the AgentPay protocol: escrow, usage recording, and 
 
 - **escrow** — Records usage and supports settlement logic for machine-to-machine payments.
 
+### Admin proposal validation
+
+`propose_admin_transfer` rejects proposing the current admin as the new admin
+(panics with `InvalidAdminProposal`). This surfaces no-op handovers as caller
+mistakes rather than silently storing a pending entry equal to the active admin.
+
 ## Prerequisites
 
 - [Rust](https://rustup.rs/) (stable, with `rustfmt`)

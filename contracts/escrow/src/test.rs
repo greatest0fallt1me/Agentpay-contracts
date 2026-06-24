@@ -248,3 +248,30 @@ fn test_record_usage_rejects_zero_requests() {
     let service_id = Symbol::new(&env, "weather_api");
     client.record_usage(&agent, &service_id, &0u32);
 }
+
+#[test]
+#[should_panic(expected = "Error(Contract, #13)")]
+fn test_propose_admin_transfer_rejects_self_target() {
+    let env = Env::default();
+    let (client, admin) = setup_initialized(&env);
+    client.propose_admin_transfer(&admin);
+}
+
+#[test]
+fn test_propose_admin_transfer_accepts_distinct_address() {
+    let env = Env::default();
+    let (client, _admin) = setup_initialized(&env);
+    let next = Address::generate(&env);
+    client.propose_admin_transfer(&next);
+    assert_eq!(client.get_pending_admin(), Some(next));
+}
+
+#[test]
+fn test_accept_admin_transfer_clears_pending() {
+    let env = Env::default();
+    let (client, _admin) = setup_initialized(&env);
+    let next = Address::generate(&env);
+    client.propose_admin_transfer(&next);
+    client.accept_admin_transfer(&next);
+    assert_eq!(client.get_pending_admin(), None);
+}
