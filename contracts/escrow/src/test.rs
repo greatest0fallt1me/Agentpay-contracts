@@ -2,7 +2,7 @@
 #![allow(deprecated)]
 
 use super::*;
-use soroban_sdk::{testutils::Address as _, Address, Symbol};
+use soroban_sdk::{testutils::Address as _, Address, String, Symbol};
 
 fn setup_initialized(env: &Env) -> (EscrowClient<'_>, Address) {
     env.mock_all_auths();
@@ -247,4 +247,49 @@ fn test_record_usage_rejects_zero_requests() {
     let agent = Address::generate(&env);
     let service_id = Symbol::new(&env, "weather_api");
     client.record_usage(&agent, &service_id, &0u32);
+}
+
+#[test]
+fn test_transfer_service_ownership_by_owner_preserves_description() {
+    let env = Env::default();
+    let (client, _admin) = setup_initialized(&env);
+    let svc = Symbol::new(&env, "infer");
+    let owner = Address::generate(&env);
+    let new_owner = Address::generate(&env);
+    let desc = String::from_str(&env, "inference service");
+    client.set_service_metadata(&svc, &desc, &owner);
+
+    client.transfer_service_ownership(&owner, &svc, &new_owner);
+
+    let meta = client.get_service_metadata(&svc).unwrap();
+    assert_eq!(meta.owner, new_owner);
+    assert_eq!(meta.description, desc);
+}
+
+#[test]
+fn test_transfer_service_ownership_by_admin() {
+    let env = Env::default();
+    let (client, admin) = setup_initialized(&env);
+    let svc = Symbol::new(&env, "infer");
+    let owner = Address::generate(&env);
+    let new_owner = Address::generate(&env);
+    let desc = String::from_str(&env, "inference service");
+    client.set_service_metadata(&svc, &desc, &owner);
+
+    client.transfer_service_ownership(&admin, &svc, &new_owner);
+
+    let meta = client.get_service_metadata(&svc).unwrap();
+    assert_eq!(meta.owner, new_owner);
+    assert_eq!(meta.description, desc);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #13)")]
+fn test_transfer_service_ownership_missing_metadata_panics() {
+    let env = Env::default();
+    let (client, _admin) = setup_initialized(&env);
+    let svc = Symbol::new(&env, "never_set");
+    let caller = Address::generate(&env);
+    let new_owner = Address::generate(&env);
+    client.transfer_service_ownership(&caller, &svc, &new_owner);
 }
