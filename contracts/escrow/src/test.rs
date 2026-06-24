@@ -4,7 +4,7 @@
 use super::*;
 use soroban_sdk::{
     testutils::{Address as _, Events, Ledger},
-    Address, IntoVal, Symbol,
+    Address, IntoVal, Symbol, Vec,
 };
 
 fn setup_initialized(env: &Env) -> (EscrowClient<'_>, Address) {
@@ -696,4 +696,136 @@ fn test_pause_pause_unpause_ends_unpaused() {
     client.unpause();
 
     assert!(!client.is_paused());
+}
+
+#[test]
+fn test_get_usage_batch_preserves_order() {
+    let env = Env::default();
+    let (client, _admin) = setup_initialized(&env);
+
+    let agent = Address::generate(&env);
+    let svc_a = Symbol::new(&env, "svc_a");
+    let svc_b = Symbol::new(&env, "svc_b");
+    let svc_c = Symbol::new(&env, "svc_c");
+
+    client.record_usage(&agent, &svc_a, &10u32);
+    client.record_usage(&agent, &svc_b, &20u32);
+    client.record_usage(&agent, &svc_c, &30u32);
+
+    let mut pairs: Vec<(Address, Symbol)> = Vec::new(&env);
+    pairs.push_back((agent.clone(), svc_b.clone()));
+    pairs.push_back((agent.clone(), svc_a.clone()));
+    pairs.push_back((agent.clone(), svc_c.clone()));
+
+    let out = client.get_usage_batch(&pairs);
+    assert_eq!(out.len(), 3);
+    assert_eq!(out.get(0), Some(20));
+    assert_eq!(out.get(1), Some(10));
+    assert_eq!(out.get(2), Some(30));
+}
+
+#[test]
+fn test_get_usage_batch_unknown_pairs_return_zero() {
+    let env = Env::default();
+    let (client, _admin) = setup_initialized(&env);
+
+    let agent = Address::generate(&env);
+    let svc = Symbol::new(&env, "never_used");
+
+    let mut pairs: Vec<(Address, Symbol)> = Vec::new(&env);
+    pairs.push_back((agent.clone(), svc.clone()));
+
+    let out = client.get_usage_batch(&pairs);
+    assert_eq!(out.len(), 1);
+    assert_eq!(out.get(0), Some(0));
+}
+
+#[test]
+fn test_get_usage_batch_mix_known_and_unknown() {
+    let env = Env::default();
+    let (client, _admin) = setup_initialized(&env);
+
+    let agent = Address::generate(&env);
+    let known = Symbol::new(&env, "known");
+    let unknown = Symbol::new(&env, "unknown");
+
+    client.record_usage(&agent, &known, &7u32);
+
+    let mut pairs: Vec<(Address, Symbol)> = Vec::new(&env);
+    pairs.push_back((agent.clone(), unknown.clone()));
+    pairs.push_back((agent.clone(), known.clone()));
+
+    let out = client.get_usage_batch(&pairs);
+    assert_eq!(out.get(0), Some(0));
+    assert_eq!(out.get(1), Some(7));
+}
+
+#[test]
+fn test_get_usage_batch_duplicate_pairs() {
+    let env = Env::default();
+    let (client, _admin) = setup_initialized(&env);
+
+    let agent = Address::generate(&env);
+    let svc = Symbol::new(&env, "dup_svc");
+    client.record_usage(&agent, &svc, &42u32);
+
+    let mut pairs: Vec<(Address, Symbol)> = Vec::new(&env);
+    pairs.push_back((agent.clone(), svc.clone()));
+    pairs.push_back((agent.clone(), svc.clone()));
+    pairs.push_back((agent.clone(), svc.clone()));
+
+    let out = client.get_usage_batch(&pairs);
+    assert_eq!(out.len(), 3);
+    assert_eq!(out.get(0), Some(42));
+    assert_eq!(out.get(1), Some(42));
+    assert_eq!(out.get(2), Some(42));
+}
+
+#[test]
+fn test_get_usage_batch_empty_returns_empty() {
+    let env = Env::default();
+    let (client, _admin) = setup_initialized(&env);
+
+    let pairs: Vec<(Address, Symbol)> = Vec::new(&env);
+    let out = client.get_usage_batch(&pairs);
+    assert_eq!(out.len(), 0);
+}
+
+#[test]
+fn test_get_usage_batch_at_bound_succeeds() {
+    let env = Env::default();
+    let (client, _admin) = setup_initialized(&env);
+
+    let agent = Address::generate(&env);
+    let svc = Symbol::new(&env, "bound_svc");
+    client.record_usage(&agent, &svc, &5u32);
+
+    let mut pairs: Vec<(Address, Symbol)> = Vec::new(&env);
+    for _ in 0..MAX_BATCH_READ {
+        pairs.push_back((agent.clone(), svc.clone()));
+    }
+    assert_eq!(pairs.len(), MAX_BATCH_READ);
+
+    let out = client.get_usage_batch(&pairs);
+    assert_eq!(out.len(), MAX_BATCH_READ);
+    assert_eq!(out.get(0), Some(5));
+    assert_eq!(out.get(MAX_BATCH_READ - 1), Some(5));
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #15)")]
+fn test_get_usage_batch_oversized_panics() {
+    let env = Env::default();
+    let (client, _admin) = setup_initialized(&env);
+
+    let agent = Address::generate(&env);
+    let svc = Symbol::new(&env, "over_svc");
+
+    let mut pairs: Vec<(Address, Symbol)> = Vec::new(&env);
+    for _ in 0..(MAX_BATCH_READ + 1) {
+        pairs.push_back((agent.clone(), svc.clone()));
+    }
+    assert_eq!(pairs.len(), MAX_BATCH_READ + 1);
+
+    client.get_usage_batch(&pairs);
 }
